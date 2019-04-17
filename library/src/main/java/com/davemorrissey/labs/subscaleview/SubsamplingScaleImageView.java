@@ -131,6 +131,9 @@ public class SubsamplingScaleImageView extends View {
     /** State change originated from a double tap zoom anim. */
     public static final int ORIGIN_DOUBLE_TAP_ZOOM = 4;
 
+    private static final float MAX_THRESHOLD = 5.0f;
+    private static final float MIN_THRESHOLD = 0.5f;
+
     // Bitmap (preview or full image)
     private Bitmap bitmap;
 
@@ -263,6 +266,11 @@ public class SubsamplingScaleImageView extends View {
     // Long click handler
     private final Handler handler;
     private static final int MESSAGE_LONG_CLICK = 1;
+    private static final int MESSAGE_RESTORE_CHECK = MESSAGE_LONG_CLICK + 1;
+
+    //private float minElasticScale = 0;
+
+    //private PointF vTranslateThreshold;
 
     // Paint objects created once and reused for efficiency
     private Paint bitmapPaint;
@@ -297,6 +305,24 @@ public class SubsamplingScaleImageView extends View {
                     SubsamplingScaleImageView.super.setOnLongClickListener(onLongClickListener);
                     performLongClick();
                     SubsamplingScaleImageView.super.setOnLongClickListener(null);
+                }else if(message.what == MESSAGE_RESTORE_CHECK){
+                    //检查是否放大超过范围，超过的话需要恢复
+                    if(scale > maxScale || scale < minScale){
+//                        if (doubleTapZoomStyle == ZOOM_FOCUS_CENTER_IMMEDIATE) {
+//                            setScaleAndCenter(targetScale, sCenter);
+//                        } else if (doubleTapZoomStyle == ZOOM_FOCUS_CENTER || !zoomIn || !panEnabled) {
+//                            new AnimationBuilder(targetScale, sCenter).withInterruptible(false).withDuration(doubleTapZoomDuration).withOrigin(ORIGIN_DOUBLE_TAP_ZOOM).start();
+//                        } else if (doubleTapZoomStyle == ZOOM_FOCUS_FIXED) {
+//                            new AnimationBuilder(targetScale, sCenter, vFocus).withInterruptible(false).withDuration(doubleTapZoomDuration).withOrigin(ORIGIN_DOUBLE_TAP_ZOOM).start();
+//                        }
+
+                        //setScaleAndCenter(maxScale, new PointF(-vTranslate.x,-vTranslate.y));
+                        PointF center = viewToSourceCoord(vCenterStart);
+                        scale = scale > maxScale ? maxScale : minScale;
+                        setScaleAndCenter(scale, center);
+//                        vTranslateThreshold = null;
+                        invalidate();
+                    }
                 }
                 return true;
             }
@@ -745,12 +771,19 @@ public class SubsamplingScaleImageView extends View {
                             consumed = true;
 
                             double previousScale = scale;
-                            scale = Math.min(maxScale, (vDistEnd / vDistStart) * scaleStart);
+
+                            //add
+                            scale = Math.min(maxScale * MAX_THRESHOLD, (vDistEnd / vDistStart) * scaleStart);
 
                             if (scale <= minScale()) {
+                                Log.e("better","scale:"+scale+"   minScale():"+minScale());
+                                Log.e("better","minScale:"+minScale);
+
                                 // Minimum scale reached so don't pan. Adjust start settings so any expand will zoom in.
                                 vDistStart = vDistEnd;
                                 scaleStart = minScale();
+                                //add
+                                scaleStart = scale;
                                 vCenterStart.set(vCenterEndX, vCenterEndY);
                                 vTranslateStart.set(vTranslate);
                             } else if (panEnabled) {
@@ -914,6 +947,8 @@ public class SubsamplingScaleImageView extends View {
                     }
                     // Trigger load of tiles now required
                     refreshRequiredTiles(true);
+
+                    handler.sendEmptyMessageDelayed(MESSAGE_RESTORE_CHECK,100);
                     return true;
                 }
                 if (touchCount == 1) {
@@ -1331,9 +1366,9 @@ public class SubsamplingScaleImageView extends View {
      */
     private boolean tileVisible(Tile tile) {
         float sVisLeft = viewToSourceX(0),
-            sVisRight = viewToSourceX(getWidth()),
-            sVisTop = viewToSourceY(0),
-            sVisBottom = viewToSourceY(getHeight());
+                sVisRight = viewToSourceX(getWidth()),
+                sVisTop = viewToSourceY(0),
+                sVisBottom = viewToSourceY(getHeight());
         return !(sVisLeft > tile.sRect.right || tile.sRect.left > sVisRight || sVisTop > tile.sRect.bottom || tile.sRect.top > sVisBottom);
     }
 
@@ -1476,6 +1511,12 @@ public class SubsamplingScaleImageView extends View {
         if (init && minimumScaleType != SCALE_TYPE_START) {
             vTranslate.set(vTranslateForSCenter(sWidth()/2, sHeight()/2, scale));
         }
+
+        //add
+//        if(scale > maxScale && vTranslateThreshold == null){
+//            vTranslateThreshold = new PointF();
+//            vTranslateThreshold.set(vTranslate);
+//        }
     }
 
     /**
@@ -1509,10 +1550,10 @@ public class SubsamplingScaleImageView extends View {
                     tile.sampleSize = sampleSize;
                     tile.visible = sampleSize == fullImageSampleSize;
                     tile.sRect = new Rect(
-                        x * sTileWidth,
-                        y * sTileHeight,
-                        x == xTiles - 1 ? sWidth() : (x + 1) * sTileWidth,
-                        y == yTiles - 1 ? sHeight() : (y + 1) * sTileHeight
+                            x * sTileWidth,
+                            y * sTileHeight,
+                            x == xTiles - 1 ? sWidth() : (x + 1) * sTileWidth,
+                            y == yTiles - 1 ? sHeight() : (y + 1) * sTileHeight
                     );
                     tile.vRect = new Rect(0, 0, 0, 0);
                     tile.fileSRect = new Rect(tile.sRect);
@@ -2222,10 +2263,10 @@ public class SubsamplingScaleImageView extends View {
      */
     private void sourceToViewRect(@NonNull Rect sRect, @NonNull Rect vTarget) {
         vTarget.set(
-            (int)sourceToViewX(sRect.left),
-            (int)sourceToViewY(sRect.top),
-            (int)sourceToViewX(sRect.right),
-            (int)sourceToViewY(sRect.bottom)
+                (int)sourceToViewX(sRect.left),
+                (int)sourceToViewY(sRect.top),
+                (int)sourceToViewX(sRect.right),
+                (int)sourceToViewY(sRect.bottom)
         );
     }
 
@@ -2282,7 +2323,11 @@ public class SubsamplingScaleImageView extends View {
      */
     private float limitedScale(float targetScale) {
         targetScale = Math.max(minScale(), targetScale);
-        targetScale = Math.min(maxScale, targetScale);
+        //add
+        //targetScale = Math.max(minScale() * MIN_THRESHOLD, targetScale);
+        //targetScale = Math.min(maxScale, targetScale);
+        //add
+        targetScale = Math.min(maxScale * MAX_THRESHOLD, targetScale);
         return targetScale;
     }
 
@@ -2490,6 +2535,10 @@ public class SubsamplingScaleImageView extends View {
     public final void setMinScale(float minScale) {
         this.minScale = minScale;
     }
+
+//    public final void setElasticMinScale(float minElasticScale) {
+//        this.minElasticScale = minElasticScale;
+//    }
 
     /**
      * This is a screen density aware alternative to {@link #setMaxScale(float)}; it allows you to express the maximum
@@ -3064,8 +3113,8 @@ public class SubsamplingScaleImageView extends View {
             anim.sCenterEnd = targetSCenter;
             anim.vFocusStart = sourceToViewCoord(targetSCenter);
             anim.vFocusEnd = new PointF(
-                vxCenter,
-                vyCenter
+                    vxCenter,
+                    vyCenter
             );
             anim.duration = duration;
             anim.interruptible = interruptible;
@@ -3083,8 +3132,8 @@ public class SubsamplingScaleImageView extends View {
                 fitToBounds(true, satEnd);
                 // Adjust the position of the focus point at end so image will be in bounds
                 anim.vFocusEnd = new PointF(
-                    vFocus.x + (satEnd.vTranslate.x - vTranslateXEnd),
-                    vFocus.y + (satEnd.vTranslate.y - vTranslateYEnd)
+                        vFocus.x + (satEnd.vTranslate.x - vTranslateXEnd),
+                        vFocus.y + (satEnd.vTranslate.y - vTranslateYEnd)
                 );
             }
 
@@ -3180,9 +3229,9 @@ public class SubsamplingScaleImageView extends View {
         void onTileLoadError(Exception e);
 
         /**
-        * Called when a bitmap set using ImageSource.cachedBitmap is no longer being used by the View.
-        * This is useful if you wish to manage the bitmap after the preview is shown
-        */
+         * Called when a bitmap set using ImageSource.cachedBitmap is no longer being used by the View.
+         * This is useful if you wish to manage the bitmap after the preview is shown
+         */
         void onPreviewReleased();
     }
 

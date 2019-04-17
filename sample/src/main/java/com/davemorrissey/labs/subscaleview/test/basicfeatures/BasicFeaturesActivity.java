@@ -11,6 +11,8 @@ import com.davemorrissey.labs.subscaleview.test.R.id;
 
 import java.util.Arrays;
 
+import static com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView.SCALE_TYPE_CENTER_CROP;
+import static com.davemorrissey.labs.subscaleview.SubsamplingScaleImageView.SCALE_TYPE_CUSTOM;
 import static com.davemorrissey.labs.subscaleview.test.R.string.*;
 import static com.davemorrissey.labs.subscaleview.test.R.layout.*;
 
@@ -30,6 +32,11 @@ public class BasicFeaturesActivity extends AbstractPagesActivity {
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         SubsamplingScaleImageView view = findViewById(id.imageView);
+
+        view.setMinimumScaleType(SCALE_TYPE_CENTER_CROP);
+
+//        view.setMinimumScaleType(SCALE_TYPE_CUSTOM);
+//        view.setMinScale(1.0f);
         view.setImage(ImageSource.asset("sanmartino.jpg"));
     }
 
