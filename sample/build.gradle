@@ -4,6 +4,10 @@ android {
     compileSdkVersion 27
     defaultConfig {
         applicationId "com.davemorrissey.labs.subscaleview.test"
+        ndk {
+            //abiFilters 'armeabi'
+            abiFilters 'armeabi-v7a'
+        }
     }
 
     sourceSets {
@@ -14,6 +18,8 @@ android {
 }
 
 dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
     implementation project(':library')
     implementation 'com.android.support:support-v4:27.1.0'
+//    implementation 'com.github.beyka:androidtiffbitmapfactory:0.9.8.7'
 }
